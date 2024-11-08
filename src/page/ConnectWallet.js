@@ -1,80 +1,80 @@
-import React, { Fragment, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-    AppBar, Box, Button,
-    CircularProgress, Toolbar, Typography
+    Button, Typography, Container,
+    Card, CardContent, CircularProgress,
+    Box, AppBar, Toolbar
 } from '@mui/material';
 import axios from 'axios';
-import { ethers } from 'ethers';
 
 import Logout from '../auth/Logout';
-import { showError } from '../utils/toast';
+import { showError, showInfo } from '../utils/toast';
 
 export default function ConnectWallet() {
-    const [account, setAccount] = useState(null);
-    const [tokens, setTokens] = useState([]);
+    const [walletAddress, setWalletAddress] = useState('');
+    const [balances, setBalances] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const connectMetaMask = async () => {
+    const MORALIS_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6ImIxYzRlZDVjLTJkMzAtNDQ3Ni05M2NkLWE0MjNkMzlkNTliMSIsIm9yZ0lkIjoiNDE1MjcwIiwidXNlcklkIjoiNDI2NzY5IiwidHlwZUlkIjoiMWQ0ZDUxMmMtYmRjYS00NTE5LTkwNTUtOTFiZTI0YTliNzJhIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3MzA5ODY5NTUsImV4cCI6NDg4Njc0Njk1NX0.K6jLsFfjCCRJGyTuPRXZW5f_l_D5jsjkVLDvIT67xRE'
+    const SUPPORTED_CHAINS = ['eth', 'bsc', 'polygon', 'avalanche'];
+
+    const connectWallet = async () => {
         if (window.ethereum) {
             try {
-                const provider = new ethers.providers.Web3Provider(window.ethereum);
-                await provider.send('eth_requestAccounts', []);
-                const signer = provider.getSigner();
-                const userAddress = await signer.getAddress();
-                setAccount(userAddress);
-            } catch (error) {
-                showError(`Error connecting to MetaMask, ${error.message}`);
+                const [address] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                setWalletAddress(address);
+                fetchBalances(address);
+            } catch (err) {
+                showError(`Error connecting wallet:, ${err}`);
             }
         } else {
-            showError('MetaMask is not installed!');
+            showError('Please install MetaMask!');
         }
     };
 
-    const disconnectMetaMask = () => {
-        setAccount(null);
-        window.ethereum && window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-    };
-
-    const handleAccountsChanged = (accounts) => {
-        setAccount(accounts[0] || null);
-    };
-
-    const fetchTokenPrice = async (tokenId) => {
-        try {
-            const res = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${tokenId}&vs_currencies=usd`);
-            return res.data[tokenId]?.usd || 0;
-        } catch (error) {
-            showError(`Error fetching token price, ${error.message}`);
-            return 0;
-        }
-    };
-
-    const getTokenData = async (walletAddress) => {
+    const fetchBalances = async (address) => {
         setLoading(true);
         try {
-            const tokenList = await axios.get(`https://api.coingecko.com/api/v3/coins/ethereum/contract/${walletAddress}`);
-            const tokenValues = await Promise.all(
-                tokenList.data.map(async (token) => {
-                    const price = await fetchTokenPrice(token.id);
-                    return { ...token, price: price };
+            const allBalances = await Promise.all(
+                SUPPORTED_CHAINS.map(async (chain) => {
+                    const response = await axios.get(
+                        `https://deep-index.moralis.io/api/v2/${address}/erc20`,
+                        {
+                            headers: { 'X-API-Key': MORALIS_API_KEY },
+                            params: { chain },
+                        }
+                    );
+
+                    return response.data.map((token) => ({
+                        ...token,
+                        chain,
+                        usdValue: token.usd || 0,
+                    }));
                 })
             );
-            setTokens(tokenValues);
-        } catch (error) {
-            showError(`Error fetching token data, ${error.message}`);
+
+            const flatBalances = allBalances.flat().filter((token) => parseFloat(token.balance) > 0);
+            if (!flatBalances.length) { showInfo('You have no coin') }
+            setBalances(flatBalances);
+        } catch (err) {
+            showError(`Error fetching balances:, ${err}`);
         }
         setLoading(false);
     };
 
-    useEffect(() => {
-        if (account) {
-            getTokenData(account);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [account]);
+    const disconnectMetaMask = () => {
+        setWalletAddress(null);
+        window.ethereum && window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+    };
+
+    const handleAccountsChanged = (accounts) => {
+        setWalletAddress(accounts[0] || null);
+    };
 
     return (
-        <div>
+        <Container maxWidth='sm'>
+            <Typography variant='h4' align='center' gutterBottom>
+                Wallet Dashboard
+            </Typography>
             <Box sx={{ display: 'flex', marginBottom: '5%' }}>
                 <AppBar component='nav'>
                     <Toolbar>
@@ -85,12 +85,12 @@ export default function ConnectWallet() {
                         />
                         <Box display={'flex'} gap={2}>
                             {
-                                account ?
+                                walletAddress ?
                                     <Button variant='contained' color='warning' onClick={disconnectMetaMask}>
                                         Disconnect MetaMask
                                     </Button>
                                     :
-                                    <Button variant='contained' color='success' onClick={connectMetaMask}>
+                                    <Button variant='contained' color='success' onClick={connectWallet}>
                                         Connect MetaMask
                                     </Button>
                             }
@@ -101,19 +101,23 @@ export default function ConnectWallet() {
             </Box>
 
             <Typography variant='h4' component='h4'>
-                {account ? `Connected Account: ${account}` : 'Not Connected'}
+                {walletAddress ? `Connected Account: ${walletAddress}` : 'Not Connected'}
             </Typography>
-            {
-                loading ? <CircularProgress />
-                    :
-                    <Fragment>
-                        {tokens.map((token, index) => (
-                            <div key={index}>
-                                <p>{token.name}: {token.amount} - ${token.price}</p>
-                            </div>
-                        ))}
-                    </Fragment>
-            }
-        </div>
+
+            {loading ?
+                <CircularProgress />
+                : (
+                    balances.map((token, index) => (
+                        <Card key={index} variant='outlined' style={{ marginTop: '10px' }}>
+                            <CardContent>
+                                <Typography variant='h6'>{token.name} ({token.symbol})</Typography>
+                                <Typography>Chain: {token.chain.toUpperCase()}</Typography>
+                                <Typography>Balance: {parseFloat(token.balance) / (10 ** token.decimals)}</Typography>
+                                <Typography>Value (USD): ${token.usdValue.toFixed(2)}</Typography>
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
+        </Container>
     );
 };

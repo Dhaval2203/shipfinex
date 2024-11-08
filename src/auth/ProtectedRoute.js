@@ -5,7 +5,7 @@ function ProtectedRoute({ children }) {
 
     if (!token) {
         // If not authenticated, redirect to the login page
-        return <Navigate to="/login" />;
+        return <Navigate to='/login' />;
     }
 
     // Otherwise, render the protected route content

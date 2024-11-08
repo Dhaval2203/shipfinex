@@ -3,7 +3,8 @@ import { Grid } from '@mui/material';
 
 import ConnectWallet from './ConnectWallet';
 import Top10Crypto from './Top10Cryptos';
-import Graph from './Graph';
+import PriceComparisionGraph from './PriceComparisionGraph';
+
 
 export default function Dashboard() {
     return (
@@ -17,7 +18,7 @@ export default function Dashboard() {
                 </Grid>
                 <Grid item xs={0.5} />
                 <Grid item xs={5.25}>
-                    <Graph />
+                    <PriceComparisionGraph />
                 </Grid>
                 <Grid item xs={0.5} />
             </Grid>

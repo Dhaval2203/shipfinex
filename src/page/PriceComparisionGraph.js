@@ -8,9 +8,11 @@ import {
 } from 'chart.js';
 import { Card, CircularProgress } from '@mui/material';
 
+import { showError } from '../utils/toast';
+
 ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
 
-export default function Graph() {
+export default function PriceComparisionGraph() {
     const [chartData, setChartData] = useState(null);
     const API_KEY = '55defdd895f2a08b209f05464f34dafdbc6507c3d9c564cbb0f3c30c45b97af4';
 
@@ -46,7 +48,7 @@ export default function Graph() {
             const historicalData = await Promise.all(historicalDataPromises);
             return historicalData;
         } catch (error) {
-            console.error('Error fetching data:', error);
+            showError(`Error fetching data:, ${error}`);
             return [];
         }
     };
